@@ -1,0 +1,18 @@
+ACME CORPORATION — Q3 INTERNAL FINANCIAL SUMMARY
+Classification: Internal — Not for external distribution
+
+Quarterly Revenue: $8.4M (up 11% quarter over quarter)
+Quarterly Operating Costs: $6.9M
+Gross Margin: 62%
+Cash Reserves (as of quarter end): $14.2M
+Headcount Budget Remaining for Q4: 12 new hires across Engineering and Customer Success
+
+Notable Items:
+- RouteFlow Enterprise tier renewal rate held at 94%, slightly above target.
+- Denver office lease renewal under negotiation; projected 8% increase in Q1 next year.
+- Marketing spend increased 15% ahead of the Q4 product launch.
+- Board has approved a $500K reserve for a potential acquisition of a small routing-analytics startup,
+  details still confidential and not yet disclosed to the broader company.
+
+This summary is prepared for internal planning purposes only and should not be shared outside Acme
+Corporation, including with customers, vendors, or press.

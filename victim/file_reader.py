@@ -1,13 +1,30 @@
 """
-VICTIM's mock file reader tool — reads and summarizes local documents.
+VICTIM's mock file reader tool - reads a document and returns its raw text.
 
-Phase 0: stub only. Implemented in Phase 1 (and exercised by the Phase 4
-indirect-injection attack).
+Phase 1: reads any .txt file inside victim/documents/ (path-traversal-safe -
+this is a deliberately *content*-naive tool, not a filesystem-unsafe one).
+The content-level naivety is the point: VICTIM treats whatever text comes
+back as trustworthy context, with no distinction between "data" and
+"instructions". That gap is what the Phase 4 indirect-injection attack
+(malicious_document.txt) is designed to exploit.
 """
 
+from pathlib import Path
 
-def read_file(path: str) -> str:
-    """
-    Not implemented until Phase 1.
-    """
-    raise NotImplementedError("VICTIM's file reader is implemented in Phase 1.")
+
+class FileNotAllowedError(Exception):
+    pass
+
+
+def read_file(documents_dir: Path, filename: str) -> str:
+    documents_dir = Path(documents_dir).resolve()
+    target = (documents_dir / filename).resolve()
+
+    # Filesystem-safety check only - this does not gate on document
+    # classification/sensitivity, by design (see documents/README.txt).
+    if documents_dir not in target.parents and target != documents_dir:
+        raise FileNotAllowedError(f"{filename} is outside the allowed documents directory")
+    if not target.exists() or not target.is_file():
+        raise FileNotAllowedError(f"{filename} does not exist")
+
+    return target.read_text(encoding="utf-8")

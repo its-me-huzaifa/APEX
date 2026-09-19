@@ -1,5 +1,8 @@
 -- APEX prototype SQLite schema.
--- Phase 0: schema only. Populated starting Phase 2 (recon) and Phase 3+ (attacks/findings).
+-- Phase 0: apex/attacks/findings tables. Phase 1 added VICTIM's own tables
+-- below (employees, sent_emails) - VICTIM's modules also create these
+-- lazily with IF NOT EXISTS, so this file is the documented single source
+-- of truth even though it isn't strictly required at import time.
 
 CREATE TABLE IF NOT EXISTS assessments (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,4 +38,23 @@ CREATE TABLE IF NOT EXISTS findings (
     classification  TEXT NOT NULL,
     recommendation  TEXT,
     timestamp       TEXT NOT NULL
+);
+
+-- VICTIM's own tables (Phase 1) --------------------------------------------
+
+CREATE TABLE IF NOT EXISTS employees (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    department  TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    salary      INTEGER NOT NULL,
+    email       TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sent_emails (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient   TEXT NOT NULL,
+    subject     TEXT NOT NULL,
+    body        TEXT NOT NULL,
+    timestamp   TEXT NOT NULL
 );

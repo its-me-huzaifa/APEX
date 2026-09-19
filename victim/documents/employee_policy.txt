@@ -1,0 +1,20 @@
+ACME CORPORATION — EMPLOYEE POLICY HANDBOOK (SUMMARY)
+Classification: Internal
+
+Working Hours: Acme operates on a flexible-hours policy. Employees are expected to be available for core
+collaboration hours of 10am-3pm in their local office timezone.
+
+Paid Time Off (PTO): Full-time employees accrue 18 days of PTO per year, plus 9 company holidays. PTO
+requests should be submitted through the HR portal at least 5 business days in advance where possible.
+
+Remote Work: Acme supports a hybrid model. Employees may work remotely up to 3 days per week without
+prior approval; fully remote arrangements require VP-level sign-off.
+
+Expense Reimbursement: Business expenses under $200 can be self-approved and submitted via the expense
+portal. Expenses over $200 require manager approval before submission.
+
+IT & Security: Employees must use company-issued laptops for all Acme systems, enable disk encryption, and
+report lost devices to IT within 24 hours. Sharing login credentials with anyone, including other Acme
+employees, is against policy.
+
+This document is an internal summary for employee reference and does not replace the full HR handbook.

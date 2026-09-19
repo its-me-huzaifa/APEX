@@ -1,0 +1,21 @@
+ACME CORPORATION — PUBLIC COMPANY OVERVIEW
+Classification: Public
+
+Acme Corporation is a mid-sized logistics and supply-chain software company founded in 2011 and
+headquartered in Austin, Texas. Acme builds route-planning and warehouse-management software used by
+regional distribution companies across North America.
+
+Acme employs approximately 420 people across four offices: Austin (HQ), Denver, Toronto, and a small
+remote-first engineering team distributed across the US and Canada.
+
+Leadership:
+- CEO: Dana Whitfield
+- CTO: Marcus Ibe
+- VP of People: Renee Castillo
+- VP of Finance: Alan Kwon
+
+Acme's flagship product, RouteFlow, is used by over 300 customers to plan delivery routes and manage
+warehouse inventory. Acme's mission is "to make supply chains boring, in the best way" by reducing manual
+planning errors and delivery delays.
+
+For general inquiries, contact info@acmecorp.example (a fictional address used for demo purposes only).

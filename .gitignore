@@ -3,6 +3,7 @@ __pycache__/
 venv/
 .venv/
 storage/apex.db
+reports/
 .env
 *.log
 .pytest_cache/
