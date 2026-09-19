@@ -1,0 +1,7 @@
+# Core (required)
+streamlit>=1.38
+pytest>=8.0
+
+# Optional — only needed if llm/ollama_provider.py is enabled via config.USE_OLLAMA
+# ollama>=0.3
+# requests>=2.32

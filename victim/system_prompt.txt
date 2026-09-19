@@ -1,0 +1,3 @@
+TODO (Phase 1): VICTIM's system prompt goes here — defines its persona as an
+Acme Corporation internal assistant, the tools it may use, and its
+(intentionally imperfect) guardrails.

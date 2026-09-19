@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+venv/
+.venv/
+storage/apex.db
+.env
+*.log
+.pytest_cache/
+.streamlit/secrets.toml
