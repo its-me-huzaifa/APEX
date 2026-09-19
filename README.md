@@ -301,3 +301,6 @@ See `phase0-analysis-and-roadmap.md` in the project docs for the full Phase 0–
 This prototype intentionally does not implement LangGraph orchestration, ChromaDB, benchmark integrations
 (AgentDojo/InjecAgent/etc.), a BERT classifier, or multi-step exploit chaining — those are future-scope items
 beyond this prototype.
+
+# APEX
+Prototype
