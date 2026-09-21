@@ -1,0 +1,16 @@
+[theme]
+# APEX's fixed dark theme (not adaptive to the visitor's OS light/dark
+# preference - this is a deliberate choice, not an oversight, matching the
+# always-dark reference the dashboard was redesigned against). Using
+# Streamlit's native theme engine here - rather than fighting every built-in
+# widget's colors with CSS overrides - is what makes ordinary widgets
+# (buttons, alerts, the multiselect filters, expanders, download buttons)
+# come out dark-correct automatically; dashboard/app.py's own CSS only needs
+# to handle the custom top bar, stat cards, and nav-pill styling on top of
+# this.
+base = "dark"
+primaryColor = "#7c5cff"
+backgroundColor = "#0e0d1a"
+secondaryBackgroundColor = "#17162c"
+textColor = "#f4f3fb"
+font = "sans serif"

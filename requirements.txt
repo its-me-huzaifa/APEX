@@ -2,7 +2,8 @@
 streamlit>=1.38
 plotly>=5.24
 pytest>=8.0
+requests>=2.32   # llm/ollama_provider.py always imports this (for its error type); the
+                 # actual HTTP calls only happen if config.USE_OLLAMA is True
 
-# Optional — only needed if llm/ollama_provider.py is enabled via config.USE_OLLAMA
-# ollama>=0.3
-# requests>=2.32
+# Optional — only needed to actually run the local model (config.USE_OLLAMA = True).
+# Install Ollama itself separately: https://ollama.com/download, then `ollama pull llama3.2:1b`.

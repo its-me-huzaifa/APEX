@@ -6,6 +6,7 @@ dashboard instance), and offer Markdown/HTML report downloads. Uses
 Streamlit's own AppTest harness (no real browser).
 """
 
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -51,12 +52,27 @@ def test_start_assessment_runs_full_pipeline(isolated_db):
     assert len(result.findings) == 14
 
 
+def _stat_card_values(at) -> dict:
+    """Extract {label: value} from the custom HTML stat cards rendered via
+    st.markdown(unsafe_allow_html=True) (dashboard/app.py replaced
+    st.metric with bespoke cards, so this walks the raw markdown instead of
+    using AppTest's at.metric)."""
+    values: dict = {}
+    for md in at.markdown:
+        body = md.value
+        labels = re.findall(r'apex-card-label">(.*?)</span>', body)
+        vals = re.findall(r'apex-card-value">(.*?)</div>', body)
+        for label, value in zip(labels, vals):
+            values[label] = value
+    return values
+
+
 def test_dashboard_shows_recon_and_summary_metrics(isolated_db):
     at = AppTest.from_file(_APP_PATH, default_timeout=60)
     at.run()
     at.button[0].click().run()
 
-    metric_values = {m.label: m.value for m in at.metric}
+    metric_values = _stat_card_values(at)
     assert metric_values["RAG"] == "Detected"
     assert metric_values["File Reader"] == "Detected"
     assert metric_values["Database Tool"] == "Detected"
@@ -76,6 +92,7 @@ def test_dashboard_shows_one_expander_per_finding_sorted_by_severity(isolated_db
     at = AppTest.from_file(_APP_PATH, default_timeout=60)
     at.run()
     at.button[0].click().run()
+    at.radio[0].set_value("Findings").run()
 
     # Finding expanders are the ones labeled with a severity icon/tag; the
     # "All Attack Attempts" panel also renders an st.expander ("Show every
@@ -92,6 +109,7 @@ def test_history_accumulates_and_numbers_correctly(isolated_db):
     at.button[0].click().run()
     at.button[0].click().run()
     at.button[0].click().run()
+    at.radio[0].set_value("History").run()
 
     assert not at.exception
 
@@ -117,6 +135,7 @@ def test_history_persists_across_fresh_app_instances(isolated_db):
     # see the previously persisted assessment in its history.
     at2 = AppTest.from_file(_APP_PATH, default_timeout=60)
     at2.run()
+    at2.radio[0].set_value("History").run()
     history_lines = [w.value for w in at2.markdown if w.value and "finding(s)" in w.value]
     assert len(history_lines) == 1
     assert history_lines[0].startswith("1.")
@@ -126,6 +145,7 @@ def test_report_download_buttons_present_after_assessment(isolated_db):
     at = AppTest.from_file(_APP_PATH, default_timeout=60)
     at.run()
     at.button[0].click().run()
+    at.radio[0].set_value("Report").run()
 
     assert not at.exception
     labels = [b.label for b in at.download_button]
@@ -137,6 +157,7 @@ def test_all_attack_attempts_panel_shows_full_attempt_count(isolated_db):
     at = AppTest.from_file(_APP_PATH, default_timeout=60)
     at.run()
     at.button[0].click().run()
+    at.radio[0].set_value("All Attempts").run()
 
     assert not at.exception
     caption_texts = [c.value for c in at.caption]

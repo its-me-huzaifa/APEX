@@ -25,8 +25,10 @@ Run standalone: python -m apex.orchestrator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from apex.attacks import direct, indirect
+from apex.attacks import direct, guardrail_bypass, indirect
 from apex.connector import LocalVictimConnector, TargetConnector
+from apex.eventlog import clear as clear_eventlog
+from apex.eventlog import log as log_event
 from apex.findings import Finding
 from apex.recon import TargetProfile, profile_target
 
@@ -104,6 +106,12 @@ def run_assessment(connector: TargetConnector | None = None) -> AssessmentResult
     if connector is None:
         connector = LocalVictimConnector()
 
+    # Fresh event log per assessment - the dashboard's System Log page shows
+    # "what happened during the latest run", not an ever-growing history of
+    # every run since the process started.
+    clear_eventlog()
+    log_event("INFO", "orchestrator", f"Assessment starting against target '{connector.name()}'.")
+
     result = AssessmentResult(
         target_name=connector.name(),
         started_at=datetime.now(timezone.utc).isoformat(),
@@ -111,33 +119,70 @@ def run_assessment(connector: TargetConnector | None = None) -> AssessmentResult
     )
 
     try:
-        # Step 1: Recon - profile the target's tools and knowledge base.
+        # Recon - profile the target's tools and knowledge base.
+        log_event("INFO", "orchestrator", "Recon - profiling target's tools and knowledge base.")
         result.target_profile = profile_target(connector)
+        log_event(
+            "SUCCESS",
+            "orchestrator",
+            f"Recon complete - attack surfaces: {', '.join(result.target_profile.attack_surfaces) or 'none'}.",
+        )
 
-        # Step 2: Direct prompt injection - the full payload library straight
-        # to chat. `attempts` includes every payload tried, even ones
-        # resisted (SAFE) - not just ones that produced a Finding.
+        # Direct prompt injection - the full payload library straight to
+        # chat. `attempts` includes every payload tried, even ones resisted
+        # (SAFE) - not just ones that produced a Finding.
+        log_event("INFO", "orchestrator", "Running the direct-injection payload library.")
         direct_findings, direct_attempts = direct.run_payload_library_with_attempts(connector)
         result.findings.extend(direct_findings)
         result.attempts.extend(direct_attempts)
+        log_event(
+            "SUCCESS",
+            "orchestrator",
+            f"Direct injection complete - {len(direct_attempts)} payload(s) tried, "
+            f"{len(direct_findings)} produced a finding.",
+        )
 
-        # Step 3: Indirect prompt injection - every scenario in
+        # Indirect prompt injection - every scenario in
         # apex.attacks.indirect.SCENARIOS (benign "please read this file"
         # requests; malicious documents do the rest). Reuses the underlying
         # VICTIM's own db_path for the attacker-mailbox check when available
         # (this prototype's LocalVictimConnector wraps an in-process
         # VICTIM); falls back to apex.attacks.indirect's own default
         # otherwise.
+        log_event("INFO", "orchestrator", "Running the indirect-injection scenarios.")
         db_path = getattr(getattr(connector, "_victim", None), "db_path", None)
         indirect_findings, indirect_attempts = indirect.run_all_indirect_scenarios(
             connector, db_path=db_path
         )
         result.findings.extend(indirect_findings)
         result.attempts.extend(indirect_attempts)
+        log_event(
+            "SUCCESS",
+            "orchestrator",
+            f"Indirect injection complete - {len(indirect_attempts)} scenario(s) tried, "
+            f"{len(indirect_findings)} produced a finding.",
+        )
+
+        # Guardrail-bypass probes - a no-op unless VICTIM's LLM guardrail is
+        # actually active (config.USE_LLM_GUARDRAIL and config.USE_OLLAMA
+        # both True), so a default assessment's attempt/finding counts are
+        # completely unaffected by this step existing. See
+        # apex/attacks/guardrail_bypass.py for why this exists: once VICTIM
+        # has a real defense, the next honest question is whether that
+        # defense itself can be talked out of its job.
+        gb_findings, gb_attempts = guardrail_bypass.run_guardrail_bypass_attempts(connector)
+        result.findings.extend(gb_findings)
+        result.attempts.extend(gb_attempts)
 
         result.status = "completed"
-    except Exception:
+        log_event(
+            "SUCCESS",
+            "orchestrator",
+            f"Assessment completed - {len(result.attempts)} total attempt(s), {len(result.findings)} finding(s).",
+        )
+    except Exception as exc:
         result.status = "error"
+        log_event("ERROR", "orchestrator", f"Assessment failed: {exc}")
         raise
     finally:
         result.finished_at = datetime.now(timezone.utc).isoformat()

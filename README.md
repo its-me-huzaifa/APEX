@@ -14,6 +14,156 @@ locally. Nothing here connects to real third-party systems, sends real email, or
 
 ## Status
 
+**Post-roadmap extension — dashboard redesign: no sidebar, fixed dark theme, top navigation.** In response to
+feedback that the previous sidebar-based layout "looked like a typical Claude-made design," the dashboard was
+rebuilt from scratch against two reference screenshots of a dark SaaS analytics dashboard (top nav bar with a
+logo and tabs, flat dark stat cards with small colored icon chips, dark chart panels).
+
+1. **`.streamlit/config.toml` (new).** A fixed (non-adaptive) dark theme via Streamlit's native theme engine
+   (`base="dark"` plus explicit `primaryColor`/`backgroundColor`/`secondaryBackgroundColor`/`textColor`) so
+   built-in widgets — buttons, `st.error`/`st.info` alerts, expanders, the multiselect log filters, download
+   buttons — render dark-correct automatically, rather than fighting each one's internal CSS classes with
+   `!important` overrides. Deliberately not adaptive to the visitor's OS light/dark preference — this matches
+   the always-dark reference design, a reversal of the prior theme-agnostic approach and called out as such in
+   the file's own comment.
+2. **No sidebar.** `dashboard/app.py`'s `main()` was restructured around a sticky top bar
+   (`st.container(key="apex-topbar")`, which Streamlit gives a stable `.st-key-apex-topbar` CSS class —
+   confirmed by inspecting the live DOM) holding the APEX logo, a `st.radio(horizontal=True)` navigation bar
+   styled as pill tabs (CSS hides the native radio circle and highlights the selected label), and the primary
+   "Start Assessment" button. All `st.sidebar.*` calls are gone.
+3. **Custom stat cards.** `st.metric()` is replaced everywhere (recon capabilities, assessment summary,
+   severity counts, system-log counts) with a bespoke `_stat_card()`/`_stat_grid()` HTML component — a small
+   icon chip, a label, and a big value — matching the reference's card style, which `st.metric` can't produce
+   on its own.
+4. **Layout fix found during live verification.** The first version put the Ollama/Guardrail/Judge status
+   badges in a third top-bar column alongside six nav pills and the button; at that width the badges overflowed
+   their column and visually overlapped the nav pills, and a headless-browser click on "System Log" actually
+   landed on the (invisible, overlapping) "Guardrail: OFF" badge and silently failed. Fixed by moving the
+   defenses-status readout out of the top bar entirely, into the page-header row next to the existing
+   "Target: VICTIM" line, as a single-line row of pill badges — leaving the top bar with only the logo, nav,
+   and button, closer to the reference's own plain top bar.
+
+`tests/test_dashboard.py` was updated for the new structure: `at.sidebar.radio[0]` → `at.radio[0]` throughout,
+and the recon/summary-metrics test now reads the custom stat cards' rendered HTML (label/value pairs) instead
+of `at.metric`, since `st.metric` is no longer used. No test counts or assertions changed beyond that
+mechanical update — same 157/157 passing. Verified live in a headless browser (Playwright) against the running
+dashboard: sidebar gone, top bar renders as a single sticky dark bar, native widgets (buttons, alerts,
+multiselect filters) come out dark automatically via the theme file, stat cards render with icons, and the
+badge/nav-pill overlap above was caught and fixed this way rather than shipped.
+
+**Post-roadmap extension — guardrail-bypass probes (harder attacks for the guardrail-hardened VICTIM) +
+readable attempt detail.** Two changes, from the same feedback: with the LLM guardrail on, VICTIM was
+resisting every attack, and the "All Attempts" table truncated the payload/scenario column so it couldn't be
+read in full.
+
+1. **`apex/attacks/guardrail_bypass.py` (new).** Once VICTIM has a real defense, the honest next question for
+   a red-teaming tool is whether *that defense* can itself be socially engineered — a real, documented class of
+   LLM-security attack (second-order prompt injection against a safety/moderation layer, not just the primary
+   model). `victim/guardrail.py`'s `LLMGuardrail.review()` drops the requester's own message straight into its
+   ALLOW/BLOCK prompt as `requester_message`, so four new probes (fake pre-authorization, "this is a developer
+   regression test", a prompt-smuggling attempt that tries to inject a fake `VERDICT: ALLOW` directly, and a
+   fabricated legal-urgency framing) try to talk to the guardrail model directly rather than just asking VICTIM
+   nicely. **Deliberately gated**: `is_active()` requires both `config.USE_LLM_GUARDRAIL` and
+   `config.USE_OLLAMA` to be `True` — otherwise `run_guardrail_bypass_attempts()` returns `([], [])`
+   immediately, zero HTTP calls, so the default assessment's attempt/finding counts (16/14) are **completely
+   unaffected** by this module existing; every existing test kept its original hardcoded counts unchanged.
+   Verified live against the fake-Ollama server (extended to simulate a "gullible" 1-2B model that can be
+   talked into ALLOW by these specific trigger phrases): all 4 probes defeated the simulated guardrail,
+   producing 4 CRITICAL findings — a concrete demonstration that a hardened VICTIM (14→2 findings with the
+   guardrail on) is not automatically invulnerable, and a genuine open question for how well a real small local
+   model resists this in practice (disclosed in `docs/LIMITATIONS.md` §14).
+2. **Readable attempt detail.** The "All Attempts" page's dataframe (which hard-truncated the payload/scenario
+   column at 100 characters with no way to see the rest) was replaced with one expander per attempt — same
+   pattern as the Findings page — showing the full, untruncated payload/scenario text and VICTIM's full actual
+   response in scrollable `st.code` blocks, plus the attack type and classification reason. The attack-type
+   chart also now includes a "Guardrail bypass" bar whenever that attack type is present (and is simply absent
+   otherwise, not a misleading zero).
+
+8 new tests (`tests/test_guardrail_bypass.py`) bring the suite to 157/157, including one that asserts the
+default assessment's attempt/finding counts are byte-for-byte unchanged. `config.py` was restored to its
+default off-state before shipping.
+
+**Post-roadmap extension — a "System Log" dashboard page (observability for the guardrail/judge/Ollama
+extension).** Once VICTIM's guardrail and APEX's LLM judge each gave Ollama a second and third call site
+(beyond the original answer-composer), it stopped being obvious from findings/attempts alone whether Ollama
+was actually being reached, or silently failing open/falling back. `apex/eventlog.py` is a small in-memory
+event log (`log(level, source, message)`, `get_events()`, `clear()` — INFO/SUCCESS/WARNING/ERROR levels,
+capped at 1000 events, cleared at the start of every `run_assessment()` call so it always reflects the latest
+run) that every relevant call site now writes to: `llm/provider.py`'s `get_provider()` (which provider got
+selected and why), `llm/ollama_provider.py`'s `generate()` (connection success with latency, or the exact
+failure), `victim/guardrail.py`'s `review()` (ALLOW/BLOCK verdicts, and fail-open warnings), `apex/judge.py`'s
+`classify_response_llm()` (LLM-judge verdicts, or a fallback warning), `victim/agent.py`'s `_route()` (which
+tool VICTIM's naive router sent a message to), and `apex/orchestrator.py`'s `run_assessment()` (recon/direct/
+indirect step progress, completion, and any exception). The dashboard's new **System Log** page (sidebar, 🩺)
+renders this as a filterable (by level and by source), color-coded, newest-first feed, with a small summary
+row (event/warning/error/success counts) up top so "is everything actually working" has a real, at-a-glance
+answer during a demo instead of only being visible in the terminal running `streamlit run`. Verified live
+against the same fake-Ollama HTTP server used for the guardrail/judge extension: with `USE_OLLAMA`,
+`USE_LLM_GUARDRAIL`, and `USE_LLM_JUDGE` all on, the log correctly showed Ollama connection successes with
+per-call latency, both indirect-injection guardrail BLOCK verdicts, and per-attempt LLM-judge classifications,
+with zero warnings/errors on a clean run. 14 new tests (`tests/test_eventlog.py`) bring the suite to 149/149
+passing. No new dependencies — this is pure Python plus the existing Streamlit rendering.
+
+**Post-roadmap extension — VICTIM defense (LLM guardrail) + LLM-as-judge classifier + dashboard redesign.**
+Three changes, all optional and off by default:
+
+1. **VICTIM can now actually defend itself.** `victim/guardrail.py`'s `LLMGuardrail` (requires
+   `config.USE_LLM_GUARDRAIL = True` and `config.USE_OLLAMA = True`) is consulted at VICTIM's two real attack
+   surfaces — before answering a knowledge-base question sourced from a `CONFIDENTIAL`-classified document, and
+   before acting on an instruction found embedded inside a document (the indirect-injection path) — and can
+   refuse either one. It fails open (allows the action, with a note) if the local model is unreachable, so it
+   can never turn a working demo into a crashing one. Verified live against a real fake-Ollama HTTP server: with
+   the guardrail on, a full assessment's findings dropped from 14 to 2 (the 2 remaining are a pre-existing,
+   unrelated rule-based classifier quirk — filenames containing the word "confidential" — present even with the
+   guardrail off), and both CRITICAL indirect-injection findings were eliminated entirely. A related bug was
+   found and fixed in the same pass: `apex/classify.py`'s weak-marker list was misclassifying a clean guardrail
+   refusal as `PARTIAL_SUCCESS` (because the refusal text contains the word "confidential"); refusal phrases are
+   now recognized and classified `SAFE`.
+2. **Ollama on APEX's (attacking) side too.** `apex/judge.py`'s `classify_response_llm()` (requires
+   `config.USE_LLM_JUDGE = True` and `config.USE_OLLAMA = True`) lets a local model judge whether an attack
+   response actually leaked something, catching a paraphrased leak the rule-based keyword matcher would miss —
+   verified live: a paraphrased compensation figure ("seventy-five to ninety-five thousand dollars annually")
+   that the rule-based classifier scores `SAFE` is correctly scored `SUCCESS` by the LLM judge. `classify_response()`
+   tries the LLM judge first and falls back to the original rule-based markers whenever the LLM path isn't usable
+   for any reason (flags off, model unreachable, unparseable response) — the function's signature and return type
+   are unchanged either way.
+3. **Dashboard redesign: sidebar navigation + visual polish.** `dashboard/app.py` moved from top tabs to a real
+   sidebar nav rail — branding, the Start Assessment action, a page list (Overview / Findings / All Attempts /
+   History / Report), and a new "Defenses & AI features" panel showing live ON/OFF badges for the Ollama
+   answer-composer, the LLM guardrail, and the LLM judge — plus a CSS pass styling stat tiles, cards, and the nav
+   list in a more modern SaaS-dashboard look, entirely within Streamlit's own theming (no hardcoded background
+   colors, so both light and dark mode still work). Functionally the same five pages exist; they're just
+   page-routed via the sidebar now instead of all rendering under tabs, which meant rewriting
+   `tests/test_dashboard.py` to explicitly select a page (`at.sidebar.radio[0].set_value(...)`) before asserting
+   on that page's content.
+
+28 new tests (`tests/test_guardrail.py`: 13, `tests/test_llm_judge.py`: 10, plus dashboard test updates) bring
+the suite to 135/135 passing, all with every HTTP call mocked. No new dependencies — the guardrail and judge
+both reuse the existing `LLMProvider`/`requests` plumbing from the earlier Ollama-answers extension. See
+`docs/LIMITATIONS.md` §11/§12 for exactly what is and isn't covered by either defense.
+
+**Post-roadmap extension — real local-LLM (Ollama) integration.** `llm/ollama_provider.py`'s
+`LocalOllamaProvider` is now a real implementation instead of a stub: it calls a local Ollama server's REST
+API (`http://localhost:11434/api/generate` by default) to generate text, guarded by `config.USE_OLLAMA`
+(`False` by default — the prototype and its whole test suite work with zero network calls out of the box).
+`LLMProvider` gained two shared methods (`summarize`, `answer_with_context`) so every provider exposes the
+same surface; `RuleBasedProvider` inherits the original zero-cost, deterministic behavior unchanged, while
+`LocalOllamaProvider` overrides `answer_with_context` to build a real prompt (VICTIM's system prompt +
+retrieved document content + the question) and let the model decide what to say. `victim/agent.py`'s
+knowledge-query handler now calls this, with a graceful fallback to the rule-based phrasing (plus a one-line
+explanation) if the configured model is unreachable — a missing or stopped local model never breaks the
+demo. This is deliberately scoped to one victim and one integration point for now: tool routing (which
+capability to invoke) and document/indirect-injection handling both stay fully rule-based; see
+`docs/LIMITATIONS.md` §11 for exactly what's covered. 15 new tests (`tests/test_llm_provider.py`, every HTTP
+call mocked) bring the suite to 112/112 passing. Verified with a real (non-mocked) HTTP round trip against a
+throwaway local test server standing in for Ollama, covering the success path, the "no context" short-circuit
+(guaranteed zero HTTP calls), and the unreachable-server fallback path — and re-verified the dashboard's
+default (Ollama-off) behavior is byte-for-byte unchanged. `requests` moves from an optional, commented-out
+dependency to a required one in `requirements.txt`, since the exception type it defines is now always
+imported (the HTTP calls themselves still only happen if Ollama is enabled). Setting up Ollama itself
+(installing it and pulling a model) is a one-time step on whichever machine runs the dashboard — see
+`docs/LIMITATIONS.md` §11 and `llm/ollama_provider.py`'s module docstring.
+
 **Post-roadmap extension — redesigned dashboard.** `dashboard/app.py` was restructured from one long scroll
 into five tabs (Overview / Findings / All Attempts / History / Report), every stat/chart panel is now a
 bordered `st.container` "card," and the Overview and All Attempts tabs gained Plotly charts (findings-by-
@@ -289,9 +439,13 @@ docs/          # demo script, architecture diagram, limitations doc, sample repo
   enough for this prototype's demo and keeps the dependency list at zero for this feature. It's written to
   accept either a live `AssessmentResult` or the dict `apex.storage.load_assessment()` returns, via a small
   normalization step, so the same function generates a report right after a run or from persisted history.
-- **No LLM is required to run this prototype.** `llm/provider.py` defines an `LLMProvider` interface with a
-  zero-cost `RuleBasedProvider` as the default. An optional `LocalOllamaProvider` can be enabled later for a
-  small (1–2B parameter) local model — never anything that needs more than a few GB of RAM.
+- **No LLM is required to run this prototype, but a real one can be plugged in.** `llm/provider.py` defines an
+  `LLMProvider` interface with a zero-cost `RuleBasedProvider` as the default. `LocalOllamaProvider`
+  (`llm/ollama_provider.py`) is a real, working implementation — talks to a local Ollama server over HTTP —
+  enabled by setting `config.USE_OLLAMA = True` and pulling a small (1–2B parameter) local model. When on, it
+  changes how VICTIM answers knowledge-base questions: a real model reasons over the retrieved document
+  content instead of a canned summary, so direct-injection payloads are testing actual model judgment. See
+  the Status entry below and `docs/LIMITATIONS.md` §11 for exactly what is and isn't covered yet.
 - **Everything is local.** SQLite for storage, plain text files for mock documents, no external calls
   required for the demo to run end to end.
 
@@ -301,6 +455,3 @@ See `phase0-analysis-and-roadmap.md` in the project docs for the full Phase 0–
 This prototype intentionally does not implement LangGraph orchestration, ChromaDB, benchmark integrations
 (AgentDojo/InjecAgent/etc.), a BERT classifier, or multi-step exploit chaining — those are future-scope items
 beyond this prototype.
-
-# APEX
-Prototype
